@@ -390,7 +390,8 @@ MonoBehaviour:
   morPrefab: {fileID: 7892715786086895106, guid: f9d9c1af404c547e1a4aca1f1dba64bd, type: 3}
   butteryellowPrefab: {fileID: 7761447005478960657, guid: d7285a99b288149f39d68ca81b76c15f, type: 3}
   DiscoBallPrefab: {fileID: 4983091469385221112, guid: 061754fee964f4995b48ffd8ffb5ff57, type: 3}
-  RocketPrefab: {fileID: 2916192833816445399, guid: 8e27b9578013d49a9873a021130f7e48, type: 3}
+  VerticalRocketPrefab: {fileID: -5149319023902408294, guid: 02802ccabb4b4456b91f55c01e4e223d, type: 3}
+  HorizontalRocketPrefab: {fileID: -6384121365240001315, guid: 3efc2ca9445a4408a9d9aae1f12ab193, type: 3}
   BombPrefab: {fileID: 5584768890138232362, guid: 819c959fbdfd14ddfb4941b4d13c230f, type: 3}
   selectedItem: {fileID: 0}
   prefabs:

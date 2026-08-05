@@ -20,6 +20,11 @@ public class Items : MonoBehaviour
     {
         
     }
+    public static bool IsSpecial(CandyType type){
+        Debug.Log("In IsSpecial");
+        return type == CandyType.verticalRocket ||type == CandyType.horizontalRocket || type == CandyType.bomb || type == CandyType.discoBall;
+        
+    }
 
    
 }

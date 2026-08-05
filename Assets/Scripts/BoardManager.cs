@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
 using Random = UnityEngine.Random;
+using System.Collections.Generic; //List<(int x, int y)> gibi bir yapıyı kullanmak için
 
 public class BoardManager : MonoBehaviour
 {
@@ -14,7 +15,8 @@ public class BoardManager : MonoBehaviour
     public  Items butteryellowPrefab;
 
     public Items DiscoBallPrefab;
-    public Items RocketPrefab;
+    public Items VerticalRocketPrefab;
+    public Items HorizontalRocketPrefab;
     public Items BombPrefab;
 
     public Items selectedItem;
@@ -75,18 +77,28 @@ public class BoardManager : MonoBehaviour
 
     void HandleRelease(Items a){
         Vector2 mousePos= Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        if(Physics2D.OverlapPoint(mousePos) != null){
-           Items clickedItem =Physics2D.OverlapPoint(mousePos).GetComponent<Items>();
-           if(clickedItem != null){
+        Vector2 overlapPoint = Physics2D.OverlapPoint(mousePos);
+        if(overlapPoint != null){
+            Items clickedItem = overlapPoint.GetComponent<Items>();
+            if(clickedItem == null){return;}
             SwapItems(a, clickedItem);
-            CheckMatches(a);
-            if(clickedItem != null){ CheckMatches(clickedItem);}
+            if(clickedItem == a){
+                if(Items.IsSpecial(a)){ClearCell(a.x, a.y);}
+                else{CheckMathces(a);}
+                FallItems();
+                SpawnItems();
+                return;
+            }
+            if(Items.IsSpecial(a)){ClearCell(a.x, a.y);}
+            else{CheckMathces(a);}
+            if(Items.IsSpecial(clickedItem)){ClearCell(clickedItem.x, clickedItem.y);}
+            else{CheckMatches(clickedItem);}
             FallItems();
             SpawnItems();
-           }
         }
-
     }
+
+    
         
    
 
@@ -111,8 +123,7 @@ public class BoardManager : MonoBehaviour
                         continue;
                     }
                     
-                Destroy(board[start, y].item.gameObject);
-                board[start, y].item = null;
+                ClearCell(start, y);
                 start++;
                 }
             }
@@ -124,12 +135,11 @@ public class BoardManager : MonoBehaviour
                         continue;
                 }
             
-                Destroy(board[x, ystart].item.gameObject);
-                board[x, ystart].item = null;
+                ClearCell(x,ystart);
                 ystart++;
             }
             }
-            Destroy(board[x, y].item.gameObject);
+            ClearCell(x,y);
             Items discoBall = Instantiate(DiscoBallPrefab, new Vector2(x,y), Quaternion.identity, null);
             board[x,y].item = discoBall;
             discoBall.type = CandyType.discoBall;
@@ -146,8 +156,7 @@ public class BoardManager : MonoBehaviour
                     start++;
                     continue;
                 }
-                Destroy(board[start, y].item.gameObject);
-                board[start, y].item = null;
+                ClearCell(start, y);
                 start++;
                 
             }
@@ -157,11 +166,10 @@ public class BoardManager : MonoBehaviour
                     ystart++;
                     continue;
                 }
-                Destroy(board[x, ystart].item.gameObject);
-                board[x, ystart].item = null;
+                ClearCell(x, ystart);
                 ystart++;
             }
-            Destroy(board[x, y].item.gameObject);
+            ClearCell(x,y);
             Items bomb = Instantiate(BombPrefab, new Vector2(x,y), Quaternion.identity, null);
             board[x,y].item = bomb;
             bomb.type = CandyType.bomb;
@@ -171,47 +179,52 @@ public class BoardManager : MonoBehaviour
             bomb.itemName = "bomb";
         }
 
-        else if(horizantalAdjoint == 4 || verticalAdjoint == 4){
-            if(horizantalAdjoint == 4){
-                while(start <= x + b){
-                    if(start == x){start++; continue;}
-                    Destroy(board[start, y].item.gameObject);
-                    board[start, y].item = null;
-                    start++;
-                }
+        else if(horizantalAdjoint == 4 ){
+            while(start <= x + b){
+                if(start == x){start++; continue;}
+                ClearCell(start, y);
+                start++;
             }
-            else{
-                while(ystart <= y + d){
-                    if(ystart == y){
-                        ystart++;
-                        continue;
-                    }
-                    Destroy(board[x, ystart].item.gameObject);
-                    board[x, ystart].item= null;
-                    ystart++;
-                }
-            }
-            Destroy(board[x, y].item.gameObject);
-            Items rocket = Instantiate(RocketPrefab, new Vector2(x,y), Quaternion.identity, null);
-            board[x,y].item = rocket;
-            rocket.type = CandyType.rocket;
-            rocket.x = x;
-            rocket.y = y;
-            rocket.boardManager = this;
-            rocket.itemName = "rocket";
+            
+            ClearCell(x,y);
+            Items horizontalRocket = Instantiate(HorizontalRocketPrefab, new Vector2(x,y), Quaternion.identity, null);
+            board[x,y].item = horizontalRocket;
+            horizontalRocket.type = CandyType.horizontalRocket;
+            horizontalRocket.x = x;
+            horizontalRocket.y = y;
+            horizontalRocket.boardManager = this;
+            horizontalRocket.itemName = "horizantalRocket";
         }
+        else if(verticalAdjoint == 4){
+            while(ystart <= y + d){
+                if(ystart == y){
+                    ystart++;
+                    continue;
+                }
+                ClearCell(x,ystart);
+                ystart++;
+                }
+            
+            ClearCell(x,y);
+            Items verticalRocket = Instantiate(VerticalRocketPrefab, new Vector2(x,y), Quaternion.identity, null);
+            board[x,y].item = verticalRocket;
+            verticalRocket.type = CandyType.verticalRocket;
+            verticalRocket.x = x;
+            verticalRocket.y = y;
+            verticalRocket.boardManager = this;
+            verticalRocket.itemName = "verticalRocket";
+        }
+
         else if(horizantalAdjoint == 3 || verticalAdjoint == 3){
             if(horizantalAdjoint == 3){
                 while(start <= x + b){
-                    Destroy(board[start, y].item.gameObject);
-                    board[start, y].item = null;
+                    ClearCell(start,y);
                     start++;
             }
             }
             else{
                 while(ystart <= y + d){
-                    Destroy(board[x, ystart].item.gameObject);
-                    board[x, ystart].item= null;
+                   ClearCell(x, ystart);
                     ystart++;
                 }
             }
@@ -324,4 +337,65 @@ public class BoardManager : MonoBehaviour
             }
         }
     }
+
+    void ClearCell(int x, int y){
+        if (x < 0 || x >= board.GetLength(0) || y < 0 || y >= board.GetLength(1)){
+            return;
+        }
+        if(board[x,y]== null || board[x,y].item == null){return;}
+
+        CandyType type = board[x,y].item.type; 
+        Destroy(board[x, y].item.gameObject);
+        board[x, y].item = null;
+
+        if(Items.IsSpecial(type)){
+            Debug.Log("SpecialItem found");
+            ActivateSpecial(x, y, type);
+        }
+    }
+
+    void ActivateSpecial(int x, int y, CandyType type){
+        Debug.Log($"ActivateSpecial: {type} @ ({x},{y})");
+        if(type == CandyType.verticalRocket){
+            for(int i = 0 ; i < board.GetLength(1); i++){
+                ClearCell(x, i);
+            }
+        }
+        else if(type == CandyType.horizontalRocket){
+            for(int i = 0 ; i < board.GetLength(0) ; i++){
+                ClearCell(i, y);
+            }
+        }
+        else if(type == CandyType.bomb){
+            for(int i = x - 1 ; i < x + 2 ; i++){
+                for(int j = y - 1 ; j < y + 2 ; j++){
+                    ClearCell(i, j);
+                }
+            }
+        }
+        /*
+        *
+        *
+        
+        else if(type == CandyType.discoBall){
+            List<(int s, int f)> toBombed = TypesOnBoard(type); // Burada discoball un hangi itemla yer değiştirdiğinin bilgisi lazım.
+            foreach(var (row, col) in toBombed){
+                ClearCell(row,col);
+            }
+        }
+        */
+    }
+/*
+    List<(int x, int y)> TypesOnBoard(CandyType type){
+        List<(int x, int y)> list = new List<(int x, int y)>();
+        for(int i = 0; i < board.GetLength(0) ; i++){
+            for(int j = 0 ; j < board.GetLength(1); j++){
+                if(board[i,j].item.type == type){
+                    list.Add((i,j));
+                }
+            }
+        }
+        return list;
+    }
+    */
 }
