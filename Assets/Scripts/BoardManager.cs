@@ -6,9 +6,6 @@ using System.Collections.Generic; //List<(int x, int y)> gibi bir yapıyı kulla
 
 public class BoardManager : MonoBehaviour
 {
-    public LevelInfo level1;
-    Cell[, ] board = new Cell[6, 6];
-
     public  Items pembePrefab;
     public  Items babybluePrefab;
     public  Items morPrefab;
@@ -21,40 +18,54 @@ public class BoardManager : MonoBehaviour
 
     public Items selectedItem;
     public Items[] prefabs;
+    public Items[] allPrefabs;
+    public LevelInfo level1;
+    public LevelInfo SpecialItemTestCase;
+    Cell[, ] board;
+    private Dictionary<CandyType, Items> candyDict = new Dictionary<CandyType, Items>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     
     void Start()
     {
-        for(int x = 0 ; x < 6 ; x++){
-            for(int y = 0 ; y < 6 ; y ++){
-                string itemname = level1.rows[x].Split(',')[y];
-                
-                Items obj;
-                if(itemname == "pembe"){
-                    obj = Instantiate(pembePrefab, new Vector2(x, y), Quaternion.identity, null);
-                }
-                else if(itemname == "babyblue"){
-                    obj = Instantiate(babybluePrefab, new Vector2(x, y), Quaternion.identity, null);
-                }
-                else if(itemname == "butteryellow"){
-                    obj = Instantiate(butteryellowPrefab, new Vector2(x, y), Quaternion.identity, null);
-                }
-                else if(itemname == "mor"){
-                    obj = Instantiate(morPrefab, new Vector2(x, y), Quaternion.identity, null);
-                }
-                else{
-                    Debug.LogWarning("isim yok");
-                    continue;
-                }
-
-                Cell cell = new Cell(x, y, obj);
+        LoadLevelInfo(SpecialItemTestCase);
+    }
+    void LoadLevelInfo(LevelInfo level){
+        board = new Cell[level.rows[0].Split(',').Length, level.rows.Length];
+        for(int x = 0 ; x < board.GetLength(0) ; x++){
+            for(int y = 0 ; y < board.GetLength(1) ; y ++){
+                Cell cell = new Cell(x, y, null);
                 board[x, y] = cell;
-                obj.boardManager = this;
-                obj.x = x;
-                obj.y = y;
-            
             }
+        }
+        for(int x = 0 ; x < board.GetLength(0) ; x++){
+            for(int y = 0 ; y < board.GetLength(1) ; y ++){
+                string itemName = level.rows[level.rows.Length-1-y].Split(',')[x];
+
+                if(Enum.TryParse(itemName, out CandyType candy)){
+                    if(candyDict.TryGetValue(candy, out Items item)){
+                        CreateItem(item, x, y);
+                    }
+                    else{
+                        Debug.LogWarning($"'{itemName}' için prefab bağlanmamış @ ({x},{y})");
+                    }
+                }            
+                else{
+                    Debug.LogWarning($"Bilinmeyen item adı: '{itemName}' @ ({x},{y})");
+                }
+            }
+        }
+
+    }
+    void Awake(){
+        foreach(Items prefab in allPrefabs){
+            if(prefab== null){continue;}
+            if(candyDict.ContainsKey(prefab.type)){
+                Debug.LogWarning("Same key " + prefab.type);
+                continue;
+                }
+            candyDict.Add(prefab.type, prefab);
+
         }
     }
     // Update is called once per frame
@@ -75,27 +86,52 @@ public class BoardManager : MonoBehaviour
         }
     }
 
+    Items CreateItem(Items prefab, int x, int y){
+        Items obj = Instantiate(prefab, new Vector2(x, y), Quaternion.identity, null);
+        obj.boardManager = this;
+        obj.x = x;
+        obj.y = y;
+        board[x, y].item = obj;
+        return obj;
+    }
+
     void HandleRelease(Items a){
         Vector2 mousePos= Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        Vector2 overlapPoint = Physics2D.OverlapPoint(mousePos);
+        Collider2D overlapPoint = Physics2D.OverlapPoint(mousePos);
         if(overlapPoint != null){
             Items clickedItem = overlapPoint.GetComponent<Items>();
             if(clickedItem == null){return;}
             SwapItems(a, clickedItem);
+            if(!HasMatch(a) && ! HasMatch(clickedItem) &&  !Items.IsSpecial(a.type) &&  !Items.IsSpecial(clickedItem.type)){
+                SwapItems(a, clickedItem);
+                return;
+            }
             if(clickedItem == a){
-                if(Items.IsSpecial(a)){ClearCell(a.x, a.y);}
-                else{CheckMathces(a);}
+                if(Items.IsSpecial(a.type)){ClearCell(a.x, a.y);}
+                else{CheckMatches(a);}
                 FallItems();
                 SpawnItems();
                 return;
             }
-            if(Items.IsSpecial(a)){ClearCell(a.x, a.y);}
-            else{CheckMathces(a);}
-            if(Items.IsSpecial(clickedItem)){ClearCell(clickedItem.x, clickedItem.y);}
-            else{CheckMatches(clickedItem);}
-            FallItems();
+            int x = clickedItem.x;
+            int y = clickedItem.y;
+            Items other = board[x, y].item;
+            if(Items.IsSpecial(a.type)){ClearCell(a.x, a.y);}
+            else{CheckMatches(a);}
+            if(other != null){
+            if(Items.IsSpecial(other.type)){ClearCell(other.x, other.y);}
+            else{CheckMatches(other);}
+}            FallItems();
             SpawnItems();
         }
+    }
+    bool HasMatch(Items swapedItem){
+        (int a, int b) = CountHorizontal(swapedItem);
+        int horizontal = a + b + 1;
+        (int c, int d) = CountVertical(swapedItem); 
+        int vertical = c + d + 1;
+        
+        return horizontal >= 3 || vertical >= 3;
     }
 
     
@@ -128,24 +164,20 @@ public class BoardManager : MonoBehaviour
                 }
             }
 
-            else{
+            if(verticalAdjoint >= 5){
                 while(ystart <= y + d){
                     if(ystart == y){
                         ystart++;
                         continue;
+                    }
+                
+                    ClearCell(x,ystart);
+                    ystart++;
                 }
-            
-                ClearCell(x,ystart);
-                ystart++;
-            }
             }
             ClearCell(x,y);
-            Items discoBall = Instantiate(DiscoBallPrefab, new Vector2(x,y), Quaternion.identity, null);
-            board[x,y].item = discoBall;
+            Items discoBall = CreateItem(DiscoBallPrefab, x, y);
             discoBall.type = CandyType.discoBall;
-            discoBall.x = x;
-            discoBall.y = y;
-            discoBall.boardManager = this;
             discoBall.itemName = "discoBall";
             
             
@@ -170,12 +202,8 @@ public class BoardManager : MonoBehaviour
                 ystart++;
             }
             ClearCell(x,y);
-            Items bomb = Instantiate(BombPrefab, new Vector2(x,y), Quaternion.identity, null);
-            board[x,y].item = bomb;
+            Items bomb = CreateItem(BombPrefab, x, y);
             bomb.type = CandyType.bomb;
-            bomb.x = x;
-            bomb.y = y;
-            bomb.boardManager = this;
             bomb.itemName = "bomb";
         }
 
@@ -187,12 +215,8 @@ public class BoardManager : MonoBehaviour
             }
             
             ClearCell(x,y);
-            Items horizontalRocket = Instantiate(HorizontalRocketPrefab, new Vector2(x,y), Quaternion.identity, null);
-            board[x,y].item = horizontalRocket;
+            Items horizontalRocket = CreateItem(HorizontalRocketPrefab, x, y);
             horizontalRocket.type = CandyType.horizontalRocket;
-            horizontalRocket.x = x;
-            horizontalRocket.y = y;
-            horizontalRocket.boardManager = this;
             horizontalRocket.itemName = "horizantalRocket";
         }
         else if(verticalAdjoint == 4){
@@ -206,12 +230,8 @@ public class BoardManager : MonoBehaviour
                 }
             
             ClearCell(x,y);
-            Items verticalRocket = Instantiate(VerticalRocketPrefab, new Vector2(x,y), Quaternion.identity, null);
-            board[x,y].item = verticalRocket;
+            Items verticalRocket = CreateItem(VerticalRocketPrefab, x, y);
             verticalRocket.type = CandyType.verticalRocket;
-            verticalRocket.x = x;
-            verticalRocket.y = y;
-            verticalRocket.boardManager = this;
             verticalRocket.itemName = "verticalRocket";
         }
 
@@ -282,18 +302,18 @@ public class BoardManager : MonoBehaviour
     }
     void FallItems(){
         int a = 1;
-        for(int column = 0 ; column < 6 ; column++){
-           for(int row = 0 ; row < 6 ; row++){
+        for(int x = 0 ; x < board.GetLength(0) ; x++){
+           for(int y = 0 ; y < board.GetLength(1) ; y++){
                 a = 1;
-                if(board[column, row] != null && board[column, row].item == null){
-                    while(row + a < 6 && board[column, row + a].item == null){a++;}
-                    if(row+a < 6){
-                        board[column, row + a].item.x = column;
+                if(board[x, y] != null && board[x, y].item == null){
+                    while(y + a < board.GetLength(1) && board[x, y + a].item == null){a++;}
+                    if(y+a < board.GetLength(1)){
+                        board[x, y + a].item.x = x;
                         
-                        board[column, row + a].item.y = row;
-                        board[column, row].item = board[column, row + a].item;
-                        board[column, row].item.transform.position = new Vector2(column, row);
-                        board[column, row + a].item = null;
+                        board[x, y + a].item.y = y;
+                        board[x, y].item = board[x, y + a].item;
+                        board[x, y].item.transform.position = new Vector2(x, y);
+                        board[x, y + a].item = null;
                 
                     }   
                 }
@@ -323,14 +343,10 @@ public class BoardManager : MonoBehaviour
     }
 
     void SpawnItems(){
-        for(int column = 0 ; column < 6 ; column++){
-            for(int row = 5 ; row >= 0 ; row--){
-                if(board[column, row] != null && board[column, row].item == null){
-                    Items item = Instantiate(prefabs[Random.Range(0, prefabs.Length)], new Vector2(column, row), Quaternion.identity, null);
-                    item.boardManager = this;
-                    item.x = column;
-                    item.y = row;
-                    board[column, row].item = item;
+        for(int x = 0 ; x < board.GetLength(0) ; x++){
+            for(int y = board.GetLength(1)-1 ; y >= 0 ; y--){
+                if(board[x, y] != null && board[x, y].item == null){
+                    CreateItem(prefabs[Random.Range(0, prefabs.Length)], x, y);
                     
                 }
                 

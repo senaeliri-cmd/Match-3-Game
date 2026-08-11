@@ -384,7 +384,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1423d3320ba141f182bb275b7b8931b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoardManager
-  level1: {fileID: 11400000, guid: 6269b0838061a4b559d13cf16fb340b0, type: 2}
   pembePrefab: {fileID: 7591368249475244394, guid: ff6b89a5424db450c8761a5bb315efdd, type: 3}
   babybluePrefab: {fileID: 5464798282097470562, guid: 8aa1c874b1de247dcaf76aa2a230c7ef, type: 3}
   morPrefab: {fileID: 7892715786086895106, guid: f9d9c1af404c547e1a4aca1f1dba64bd, type: 3}
@@ -399,6 +398,17 @@ MonoBehaviour:
   - {fileID: 7761447005478960657, guid: d7285a99b288149f39d68ca81b76c15f, type: 3}
   - {fileID: 7892715786086895106, guid: f9d9c1af404c547e1a4aca1f1dba64bd, type: 3}
   - {fileID: 7591368249475244394, guid: ff6b89a5424db450c8761a5bb315efdd, type: 3}
+  allPrefabs:
+  - {fileID: 7591368249475244394, guid: ff6b89a5424db450c8761a5bb315efdd, type: 3}
+  - {fileID: 7892715786086895106, guid: f9d9c1af404c547e1a4aca1f1dba64bd, type: 3}
+  - {fileID: 5464798282097470562, guid: 8aa1c874b1de247dcaf76aa2a230c7ef, type: 3}
+  - {fileID: 7761447005478960657, guid: d7285a99b288149f39d68ca81b76c15f, type: 3}
+  - {fileID: 4983091469385221112, guid: 061754fee964f4995b48ffd8ffb5ff57, type: 3}
+  - {fileID: -5149319023902408294, guid: 02802ccabb4b4456b91f55c01e4e223d, type: 3}
+  - {fileID: -6384121365240001315, guid: 3efc2ca9445a4408a9d9aae1f12ab193, type: 3}
+  - {fileID: 5584768890138232362, guid: 819c959fbdfd14ddfb4941b4d13c230f, type: 3}
+  level1: {fileID: 11400000, guid: 6269b0838061a4b559d13cf16fb340b0, type: 2}
+  SpecialItemTestCase: {fileID: 11400000, guid: b2e33926b1e4f464b9061432659d63c7, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
