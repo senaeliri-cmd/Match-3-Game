@@ -2,85 +2,79 @@
 
 Son güncelleme: 4 Ağustos 2026
 
-## Tamamlananlar
+## Çalışan durum (commit atıldı)
 
-**Adım 1 — `ClearCell(x, y)`**
-Tekrar eden `Destroy + item = null` tek metoda toplandı. Sınır kontrolü ve boş
-hücre guard'ı metodun içinde — çağıran hiçbir yer kırpma yapmıyor.
+**Özel item sistemi tamamen çalışıyor.**
 
-**Adım 2 — `CandyType` bölündü**
-`rocketHorizontal` / `rocketVertical`. İki ayrı prefab, Inspector'dan bağlı.
-Yön, eşleşmenin oluşum yönüne göre belirleniyor.
+- `ClearCell(x, y)` — yok etmenin tek kapısı. Sınır kontrolü ve boş hücre guard'ı içeride,
+  bu yüzden hiçbir çağıran kırpma yapmıyor.
+- `CreateItem(prefab, x, y)` — yaratmanın tek kapısı. Grid→dünya koordinat dönüşümü burada.
+- `ActivateSpecial(x, y, type)` — yatay roket satırı, dikey roket sütunu, bomba 3x3.
+- Tetikleme: tıklama ve takas. Geçersiz takas `HasMatch` ile geri alınıyor.
+- **Zincir patlama doğrulandı** — yatay roket → dikey roket → bomba, üç seviye derinlik,
+  sonsuz döngü yok (*mark-before-recurse*: hücre önce `null`'a çekiliyor).
+- `LoadLevelInfo(level)` — seviye yükleme `Start`'tan ayrıldı. Tahta boyutu veriden geliyor.
+- `Awake`'te `Dictionary<CandyType, Items>` kuruluyor, `Enum.TryParse` + `TryGetValue` ile
+  seviye dosyasından özel item yüklenebiliyor (`SpecialItemTestCase` bunun için var).
+- Rastgele üretim havuzu (`prefabs`) ile tam liste (`allPrefabs`) ayrı.
 
-**Adım 3 — `ActivateSpecial(x, y, type)`**
-Yatay roket satırı, dikey roket sütunu, bomba 3x3'ü temizliyor.
-Disco yorum satırında — hangi renkle takas edildiği bilgisi eksik.
+## Sıradaki işler — bu sıra önemli
 
-**Adım 4 — Zincir patlama** ✅ *Console log'uyla doğrulandı*
-```
-ActivateSpecial: horizontalRocket @ (5,1)
-SpecialItem found
-ActivateSpecial: horizontalRocket @ (4,1)
-```
-İkinci roket aynı satırı süpürdü ama hücreler `null` olduğu için guard'dan döndü —
-sonsuz döngü yok. *Mark-before-recurse* çalışıyor.
+**1. Adım 6 — `FindMatches` (3–4 gün)**
+Refactor gibi görünüyor ama cascade için zorunlu ön koşul: cascade'de başlangıç item'ı
+yok, tahtanın tamamını taraman gerekiyor. Dönüş tipi sadece hücre listesi olamaz —
+hangi şekil olduğu da lazım (özel item üretimi ona bağlı). **Bu projedeki en tasarım-
+ağırlıklı iş; acele etme, üstüne üç şey daha kurulacak.**
 
-**Adım 5 — Tetikleme**
-Tıklama ve takas ile özel item patlıyor. Geçersiz takas `HasMatch` ile geri alınıyor.
-Ölü nesne referansı yerine `board` üzerinden kontrol yapılıyor.
+**2. Cascade (2–3 gün)** — patlat → düşür → doldur → tekrar ara, eşleşme kalmayana kadar.
+Mevcut koddaki gizli hataları ortaya dökecek.
 
-## Yarın: test araçları
+**3. Disco ball (1 gün)** — zor kısmı kod değil, bilginin akışı: hedef renk takas anında
+doğuyor ama `ActivateSpecial`'a ulaşmıyor.
 
-Rastgele tahtada senaryo beklemek yerine debug aracı yaz:
+**4. Kombinasyonlar (2–3 gün)** — roket+roket artı, roket+bomba geniş, disco+özel.
 
-- Hızlı yol: `Update`'te tuş kısayolu — B'ye basınca `selectedItem`'ın hücresine bomba
-- Temiz yol: `[ContextMenu("Bomba Koy")]` — Inspector'dan sağ tıkla çalıştır
-- En iyi yol: `LevelInfo`'ya özel item isimleri ekle (`rocketH`, `bomb`...), test
-  senaryolarını seviye dosyası olarak yaz
+**5. Deadlock + karıştırma (2 gün)** — `HasMatch` üzerine kurulur. Mülakat malzemesi.
 
-Sonuncusu `LoadLevel` refactor'üyle aynı yere dokunuyor, birlikte yapılmalı.
+**6. Oyun kuralları (1–2 gün)** — hamle sayısı, hedef, kazanma/kaybetme.
 
-**Görsel test notu:** iki *yatay* roketin zinciri ekranda görünmez — ikisi de aynı
-satırı süpürür. Görmek için **yatay + dikey** (artı şekli) veya **roket + bomba**
-kombinasyonu kur. Gözlemlenebilir fark üretmeyen test, test değildir.
+`MoveItem(from, to)` refactor'ünü cascade'den **önce** yap — `item.x`, `item.y` ve
+`transform.position` üçlüsü `FallItems` ve `SwapItems`'ta elle senkronize ediliyor ve
+cascade `FallItems`'ı çok daha sık çağıracak.
 
-## Sonraki adımlar
+## Takvim
 
-- **Adım 6** — Eşleşme mantığını `BoardManager`'dan ayır. `CountHorizontal`,
-  `CountVertical` zaten saf fonksiyonlar; `FindMatches` bir `MatchResult` dönmeli
-  (hücre listesi + şekil bilgisi, çünkü hangi özel item'ın üretileceği şekle bağlı).
-  Kazanç: Unity açmadan unit test.
-- **Adım 7** — `ActivateSpecial`'ın `if` zincirini polimorfizme çevir (Open/Closed).
-- **`LoadLevel(LevelInfo)`** — kurulumu `Start`'tan ayır. Koordinat dönüşümü
-  (dikey çevirme) **sadece burada** yaşasın, başka hiçbir yerde `-1-y` geçmesin.
+- **Ağustos kalanı** — 1, 2, 3 (derin odak isteyen işler)
+- **Eylül** (taşınma haftası hariç) — 4, 5, 6
+- **Ekim–Aralık** (okul, düşük tempo) — animasyon, UI, ses, seviye tasarımı
+- **Ocak** — başvuru
 
-## Biriken teknik borç
+Projenin yanında: algoritma/veri yapıları pratiği, CV, GitHub README + ekran görüntüleri.
 
-- `LevelInfo.rows[x]` aslında **sütun** veriyor → `rows[y].Split(',')[x]` olmalı.
-  Tahta kare olduğu için şu an patlamıyor; 8x9'a geçince `IndexOutOfRange` verir.
-  Mevcut asset verisinin transpoze edilmesi gerekecek.
-- Cascade yok — düşme ve doldurma sonrası yeni eşleşmeler kontrol edilmiyor.
-- `>= 5` dalı, hem yatay hem dikey 5'li olan durumda sadece yatayı temizliyor.
-- Disco: takas edilen rengin bilgisi `ActivateSpecial`'a ulaşmıyor.
-- İki özel item takası: ayrı ele alınmalı (roket+roket artı, roket+bomba dev patlama).
-- `Instantiate`/`Destroy` yerine object pooling.
-- Tıklama dalındaki üç satırlık tekrar → `Resolve(Items item)` metoduna çıkarılabilir.
-- Girinti bozuklukları — VS Code'da Shift+Option+F.
+## Kalan teknik borç
 
-## Bu projede öğrenilenler
+- `>= 5` dalı, hem yatay hem dikey 5'li olan durumda sadece yatayı temizliyor
+- Tıklama dalındaki üç satırlık tekrar → `Resolve(Items item)` metoduna çıkarılabilir
+- `HandleRelease`'te `IsSpecial` aynı item için iki kez soruluyor (105 ve 110)
+- `Instantiate`/`Destroy` yerine object pooling
+- Adım 7 — `ActivateSpecial`'ın `if` zinciri polimorfizme çevrilebilir (Open/Closed)
+- `Debug.Log`'ları temizle (`In IsSpecial` gürültü yapıyor)
+
+## Öğrenilenler
 
 - Değer tipi / referans tipi; Unity'de `Destroy` ertelenir, "fake null"
-- Unity `==` operatörünü ezer: yok edilmiş nesne `null`'a eşit sayılır →
-  referans karşılaştırması güvenilmez, koordinat üzerinden kimlik kullan
-- MonoBehaviour `new` ile yaratılamaz
-- Prefab dosyası kodda değişken yaratmaz — `public` alan + Inspector'da sürükleme
-- Guard clause, erken çıkış, tek çıkış noktası
+- Unity `==`'i ezer: yok edilmiş nesne `null`'a eşit sayılır → referans karşılaştırması
+  güvenilmez, kimlik olarak koordinat kullan
+- **Enum'lar sayı olarak serialize edilir** — ortadan silmek/sıra değiştirmek kaydedilmiş
+  veriyi sessizce bozar. Sadece sona ekle, ya da değerleri açıkça sabitle.
+- MonoBehaviour `new` ile yaratılamaz; prefab dosyası kodda değişken yaratmaz
+- Guard clause, erken çıkış, tek çıkış noktası — ve guard'a çevirirken koşulu ters çevir
 - Compiler-driven refactoring: enum değerini silip derleyiciye çağıranları buldurma
-- Mekanik refactor tehlikelidir — `Destroy(board[start,y]...)` → `ClearCell(x,y)`
-  hatası derlendi ama yanlıştı (*silent failure*)
-- `Try` öneki `try/catch` değil, TryParse desenidir; exception kontrol akışı için
-  kullanılmaz (pahalı + `Update` içinde kalan kodu atlatır)
+- Mekanik refactor tehlikelidir — derlenir ama yanlış olur (*silent failure*)
+- `Try` öneki `try/catch` değil, TryParse desenidir; exception kontrol akışı için kullanılmaz
 - İsimlendirme: `Has`/`Is`/`Can` saf sorgular, `Try` bool+veri, PascalCase public
-- Off-by-one: kapsayıcı/dışlayıcı sınırı karıştırma
-- Erken optimizasyon yapma — 36 hücrelik O(n²) tarama sorun değil
-- Önce derleyiciye sor, derleyicinin bilemeyeceğini insana sor
+- Tek konvansiyon seç: `x`/`y` mi `row`/`column` mu — karıştırmak bu projede 4 hataya yol açtı
+- Dönüşüm sınırda, tek yerde yapılır (koordinat çevirme, string→enum)
+- Stack trace aşağıdan yukarı okunur; tekrar eden metod adı özyineleme derinliğidir
+- Gözlemlenebilir fark üretmeyen test, test değildir
+- Erken optimizasyon yapma; önce derleyiciye sor, sonra insana
