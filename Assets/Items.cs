@@ -6,8 +6,6 @@ public class Items : MonoBehaviour
     public CandyType type;
     public BoardManager boardManager;
     public string itemName;
-    public int x;
-    public int y;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()

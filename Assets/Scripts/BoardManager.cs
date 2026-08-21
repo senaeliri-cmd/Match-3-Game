@@ -16,7 +16,9 @@ public class BoardManager : MonoBehaviour
     public Items HorizontalRocketPrefab;
     public Items BombPrefab;
 
-    public Items selectedItem;
+    public int selectedX;
+    public int selectedY;
+
     public Items[] prefabs;
     public Items[] allPrefabs;
     public LevelInfo level1;
@@ -71,64 +73,68 @@ public class BoardManager : MonoBehaviour
     // Update is called once per frame
    void Update(){
     // 1. Mouse basıldı → seç
+    int releaseX;
+    int releaseY;
     if(Mouse.current.leftButton.wasPressedThisFrame){
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero);
-        if(hit.collider != null){
-            selectedItem = hit.collider.GetComponent<Items>();
-        }
+        selectedX = Mathf.RoundToInt(mousePos.x);
+        selectedY = Mathf.RoundToInt(mousePos.y);
     }
 
     // 3. Mouse bırakıldı → swap et
-    if(Mouse.current.leftButton.wasReleasedThisFrame && selectedItem != null){
-        HandleRelease(selectedItem);
-        selectedItem = null;
+    if(Mouse.current.leftButton.wasReleasedThisFrame && IsValidCoordinate(selectedX, selectedY) && board[selectedX, selectedY] != null){
+        Vector2 mousePos2 = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+        releaseX = Mathf.RoundToInt(mousePos2.x);
+        releaseY = Mathf.RoundToInt(mousePos2.y);
+        HandleRelease(selectedX, selectedY, releaseX, releaseY);
+        selectedX = -1;
+        selectedY = -1;
         }
+        
     }
 
     Items CreateItem(Items prefab, int x, int y){
-        Items obj = Instantiate(prefab, new Vector2(x, y), Quaternion.identity, null);
+        Items obj = Instantiate(prefab, GridToWorld(x, y), Quaternion.identity, null);
         obj.boardManager = this;
-        obj.x = x;
-        obj.y = y;
         board[x, y].item = obj;
         return obj;
     }
 
-    void HandleRelease(Items a){
-        Vector2 mousePos= Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        Collider2D overlapPoint = Physics2D.OverlapPoint(mousePos);
-        if(overlapPoint != null){
-            Items clickedItem = overlapPoint.GetComponent<Items>();
-            if(clickedItem == null){return;}
-            SwapItems(a, clickedItem);
-            if(!HasMatch(a) && ! HasMatch(clickedItem) &&  !Items.IsSpecial(a.type) &&  !Items.IsSpecial(clickedItem.type)){
-                SwapItems(a, clickedItem);
+    void HandleRelease(int pressX, int pressY, int releaseX, int releaseY){
+        if(!IsValidCoordinate(releaseX, releaseY) || !IsValidCoordinate(pressX, pressY)){return;}
+
+            if(board[releaseX, releaseY].item == null || board[pressX, pressY].item == null){return;}
+            SwapItems(pressX, pressY, releaseX, releaseY);
+            if(!HasMatch(pressX, pressY) && !HasMatch(releaseX, releaseY) &&  !Items.IsSpecial(board[pressX, pressY].item.type) &&  !Items.IsSpecial(board[releaseX, releaseY].item.type)){
+                SwapItems(pressX, pressY, releaseX, releaseY);
                 return;
             }
-            if(clickedItem == a){
-                if(Items.IsSpecial(a.type)){ClearCell(a.x, a.y);}
-                else{CheckMatches(a);}
+            
+            if(pressX == releaseX && pressY == releaseY){
+                if(Items.IsSpecial(board[pressX, pressY].item.type)){ClearCell(pressX, pressY);}
+                else{CheckMatches(pressX, pressY);}
                 FallItems();
                 SpawnItems();
                 return;
             }
-            int x = clickedItem.x;
-            int y = clickedItem.y;
-            Items other = board[x, y].item;
-            if(Items.IsSpecial(a.type)){ClearCell(a.x, a.y);}
-            else{CheckMatches(a);}
+
+            if(Items.IsSpecial(board[releaseX, releaseY].item.type)){ClearCell(releaseX, releaseY);}
+            else{CheckMatches(releaseX, releaseY);}
+            
+            Items other = board[pressX, pressY].item; 
+
             if(other != null){
-            if(Items.IsSpecial(other.type)){ClearCell(other.x, other.y);}
-            else{CheckMatches(other);}
-}            FallItems();
+                if(Items.IsSpecial(other.type)){ClearCell(pressX, pressY);}
+                else{CheckMatches(pressX, pressY);}
+            }            
+            FallItems();
             SpawnItems();
         }
-    }
-    bool HasMatch(Items swapedItem){
-        (int a, int b) = CountHorizontal(swapedItem);
+    
+    bool HasMatch(int x, int y){
+        (int a, int b) = CountHorizontal(x, y);
         int horizontal = a + b + 1;
-        (int c, int d) = CountVertical(swapedItem); 
+        (int c, int d) = CountVertical(x, y); 
         int vertical = c + d + 1;
         
         return horizontal >= 3 || vertical >= 3;
@@ -138,22 +144,23 @@ public class BoardManager : MonoBehaviour
         
    
 
-    void CheckMatches(Items clickItem){
-        (int a, int b) = CountHorizontal(clickItem);
+    void CheckMatches(int itemCellX, int itemCellY){
+
+        (int a, int b) = CountHorizontal(itemCellX, itemCellY);
         int horizantalAdjoint = a + b + 1;
-        (int c, int d) = CountVertical(clickItem); 
+        (int c, int d) = CountVertical(itemCellX, itemCellY); 
         int verticalAdjoint = c + d + 1;
-        int start = clickItem.x - a;
-        int ystart = clickItem.y - c;
+        int start = itemCellX - a;
+        int ystart = itemCellY - c;
         
 
-        int x = clickItem.x;
-        int y = clickItem.y;
+        int x = itemCellX;
+        int y = itemCellY;
         int j = y;
 
         if( horizantalAdjoint >= 5 || verticalAdjoint >= 5){
             if(horizantalAdjoint >= 5){
-                while(start <= clickItem.x + b){
+                while(start <= itemCellX + b){
                     if(start == x){
                         start++;
                         continue;
@@ -255,21 +262,21 @@ public class BoardManager : MonoBehaviour
         }
     }
 
-    (int, int) CountHorizontal(Items item){
-        int x = item.x + 1;
-        int y = item.y;
+    (int, int) CountHorizontal(int cellX, int cellY){
+        int x = cellX + 1;
+        int y = cellY;
         int leftNum = 0;
         int rightNum = 0;
-        CandyType correctType = item.type;
+        CandyType correctType = board[cellX,cellY].item.type;
 
-        while(x >= 0 && x < 6 && y >= 0 && y < 6 && board[x, y] != null && board[x, y].item != null &&  board[x, y].item.type ==  correctType){
+        while(IsValidCoordinate(x, y) && board[x, y] != null && board[x, y].item != null &&  board[x, y].item.type ==  correctType){
             rightNum++;
             x++;
         }
         //reset x again
-        x = item.x - 1;
+        x = cellX - 1;
 
-        while(x >= 0 && x < 6 && y >= 0 && y < 6 && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
+        while(IsValidCoordinate(x, y) && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
             leftNum++;
             x--;
         }
@@ -277,21 +284,21 @@ public class BoardManager : MonoBehaviour
         return (leftNum, rightNum);
 
     }
-    (int, int) CountVertical(Items item){
-        int x = item.x;
-        int y = item.y + 1;
+    (int, int) CountVertical(int cellX, int cellY){
+        int x = cellX;
+        int y = cellY + 1;
         int upNum = 0;
         int downNum = 0;
-        CandyType correctType = item.type;
+        CandyType correctType = board[cellX,cellY].item.type;
 
-        while(x >= 0 && x < 6 && y >= 0 && y < 6 && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
+        while(IsValidCoordinate(x, y) && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
             upNum++;
             y++;
         }
         //reset x again
-        y = item.y - 1;
+        y = cellY - 1;
 
-        while(x >= 0 && x < 6 && y >= 0 && y < 6 && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
+        while(IsValidCoordinate(x, y) && board[x, y] != null && board[x, y].item != null && board[x, y].item.type == correctType){
             downNum++;
             y--;
         }
@@ -301,19 +308,17 @@ public class BoardManager : MonoBehaviour
 
     }
     void FallItems(){
-        int a = 1;
+
         for(int x = 0 ; x < board.GetLength(0) ; x++){
            for(int y = 0 ; y < board.GetLength(1) ; y++){
-                a = 1;
+                int a = 1;
                 if(board[x, y] != null && board[x, y].item == null){
+
                     while(y + a < board.GetLength(1) && board[x, y + a].item == null){a++;}
-                    if(y+a < board.GetLength(1)){
-                        board[x, y + a].item.x = x;
-                        
-                        board[x, y + a].item.y = y;
-                        board[x, y].item = board[x, y + a].item;
-                        board[x, y].item.transform.position = new Vector2(x, y);
-                        board[x, y + a].item = null;
+
+                    if(y + a < board.GetLength(1) && board[x, y + a] != null){ 
+
+                        MoveItem(x, y + a, x, y);
                 
                     }   
                 }
@@ -321,24 +326,26 @@ public class BoardManager : MonoBehaviour
         }
     }
 
-    void SwapItems(Items a, Items b){
-        if((Math.Abs(a.x - b.x) == 1 && Math.Abs(a.y - b.y) == 0) ||
-            (Math.Abs(a.x - b.x) == 0 && Math.Abs(a.y - b.y) == 1)){
-            //Gridde konum Items konum swap ı
-            int savedX = a.x;
-            int savedY = a.y;
-            a.x =b.x;
-            a.y = b.y;
-            b.x = savedX;
-            b.y = savedY;
+    void SwapItems(int aX, int aY, int bX, int bY){
+
+        if((Math.Abs(aX - bX) == 1 && Math.Abs(aY - bY) == 0) ||
+            (Math.Abs(aX - bX) == 0 && Math.Abs(aY - bY) == 1)){
 
             //Görsel değişim swap ı
-            Vector3 temPos = a.transform.position;
-            a.transform.position = b.transform.position;
-            b.transform.position = temPos;
+            board[aX, aY].item.transform.position = GridToWorld(bX, bY);
+            board[bX, bY].item.transform.position = GridToWorld(aX, aY);
+            
+            //Gridde konum Items konum swap ı
+            int savedX = aX;
+            int savedY = aY;
+            aX = bX;
+            aY = bY;
+            bX = savedX;
+            bY = savedY;
 
-            board[a.x, a.y].item = a;
-            board[b.x, b.y].item = b;
+            Items tempItem = board[aX, aY].item;
+            board[aX, aY].item = board[bX, bY].item;
+            board[bX, bY].item = tempItem;
         }
     }
 
@@ -355,7 +362,7 @@ public class BoardManager : MonoBehaviour
     }
 
     void ClearCell(int x, int y){
-        if (x < 0 || x >= board.GetLength(0) || y < 0 || y >= board.GetLength(1)){
+        if (!IsValidCoordinate(x, y)){
             return;
         }
         if(board[x,y]== null || board[x,y].item == null){return;}
@@ -401,6 +408,31 @@ public class BoardManager : MonoBehaviour
         }
         */
     }
+
+    void MoveItem(int fromX, int fromY, int toX, int toY){
+        if(!IsValidCoordinate(fromX, fromY) || !IsValidCoordinate(toX, toY)){return;}
+        
+        if(board[toX, toY].item != null){
+            Debug.LogError("Goal cell is full can not move should have been swapedItem");
+            return;
+            } 
+
+        if(board[fromX, fromY].item == null){
+            Debug.LogError("MoveItem: Item to be moved is null");
+            return;
+        }
+        Items item = board[fromX, fromY].item;
+        board[toX, toY].item = board[fromX, fromY].item;
+        board[fromX, fromY].item = null;
+
+        item.transform.position = GridToWorld(toX, toY);
+    }
+
+    bool IsValidCoordinate(int x, int y){
+        return(0<= x && x < board.GetLength(0) && 0<= y && y < board.GetLength(1)); 
+    }
+
+   Vector2 GridToWorld(int x, int y) => new Vector2(x, y);
 /*
     List<(int x, int y)> TypesOnBoard(CandyType type){
         List<(int x, int y)> list = new List<(int x, int y)>();
