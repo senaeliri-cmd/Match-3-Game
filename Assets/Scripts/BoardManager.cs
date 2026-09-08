@@ -3,14 +3,10 @@ using UnityEngine.InputSystem;
 using System;
 using Random = UnityEngine.Random;
 using System.Collections.Generic; //List<(int x, int y)> gibi bir yapıyı kullanmak için
+using System.Linq; // Distinct() için
 
 public class BoardManager : MonoBehaviour
 {
-    public  Items pembePrefab;
-    public  Items babybluePrefab;
-    public  Items morPrefab;
-    public  Items butteryellowPrefab;
-
     public Items DiscoBallPrefab;
     public Items VerticalRocketPrefab;
     public Items HorizontalRocketPrefab;
@@ -23,6 +19,8 @@ public class BoardManager : MonoBehaviour
     public Items[] allPrefabs;
     public LevelInfo level1;
     public LevelInfo SpecialItemTestCase;
+    public LevelInfo MatchFinderTest1;
+    public LevelInfo MatchFinderTest2;
     Cell[, ] board;
     private Dictionary<CandyType, Items> candyDict = new Dictionary<CandyType, Items>();
 
@@ -30,7 +28,11 @@ public class BoardManager : MonoBehaviour
     
     void Start()
     {
-        LoadLevelInfo(SpecialItemTestCase);
+        LoadLevelInfo(MatchFinderTest2);
+        MatchFinder finder = new MatchFinder();
+        var groups = finder.FindMatches(board);
+        Debug.Log($"gruplar: {groups.Count}");
+        Debug.Log($"distinct gruplar{groups.Values.Distinct().Count()}");
     }
     void LoadLevelInfo(LevelInfo level){
         board = new Cell[level.rows[0].Split(',').Length, level.rows.Length];
@@ -156,7 +158,6 @@ public class BoardManager : MonoBehaviour
 
         int x = itemCellX;
         int y = itemCellY;
-        int j = y;
 
         if( horizantalAdjoint >= 5 || verticalAdjoint >= 5){
             if(horizantalAdjoint >= 5){
@@ -372,13 +373,11 @@ public class BoardManager : MonoBehaviour
         board[x, y].item = null;
 
         if(Items.IsSpecial(type)){
-            Debug.Log("SpecialItem found");
             ActivateSpecial(x, y, type);
         }
     }
 
     void ActivateSpecial(int x, int y, CandyType type){
-        Debug.Log($"ActivateSpecial: {type} @ ({x},{y})");
         if(type == CandyType.verticalRocket){
             for(int i = 0 ; i < board.GetLength(1); i++){
                 ClearCell(x, i);
