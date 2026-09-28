@@ -33,10 +33,13 @@ public class MatchFinder
                 if(HasMatchHorizontal(left, right) && left == 0){  
                     MatchGroup group =  new MatchGroup((x, y), (left, right), (top, bottom));
                     cellToGroup[(x, y)] = group;
+                    group.Cells.Add((x, y));
+                    
                     
                     
                     for(int xl = x + 1; xl <= x + right ; xl++){
                         cellToGroup[(xl,y)] = group;
+                        group.Cells.Add((xl, y));
                     }
                 }
             }
@@ -59,12 +62,15 @@ public class MatchFinder
                             found = true; 
                             cellToGroup[(x,yl)].Vertical = (top, bottom);
                             groupFoundTrue = cellToGroup[(x,yl)];
+                            groupFoundTrue.Position = (x, yl);
                         }
                     }
                    
                    MatchGroup group = found ? groupFoundTrue : new MatchGroup((x, y), (left, right), (top, bottom));
                    for(int yl = y ; yl <= y + top ; yl++){
                         cellToGroup[(x, yl)] = group;
+                        group.Cells.Add((x, yl));
+                  
                     }
                 }
             }

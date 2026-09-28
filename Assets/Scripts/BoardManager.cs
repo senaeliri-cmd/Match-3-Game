@@ -5,6 +5,7 @@ using Random = UnityEngine.Random;
 using System.Collections.Generic; //List<(int x, int y)> gibi bir yapıyı kullanmak için
 using System.Linq; // Distinct() için
 
+
 public class BoardManager : MonoBehaviour
 {
     public Items DiscoBallPrefab;
@@ -23,16 +24,18 @@ public class BoardManager : MonoBehaviour
     public LevelInfo MatchFinderTest2;
     Cell[, ] board;
     private Dictionary<CandyType, Items> candyDict = new Dictionary<CandyType, Items>();
+    
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     
     void Start()
     {
-        LoadLevelInfo(MatchFinderTest2);
+        LoadLevelInfo(MatchFinderTest1);
         MatchFinder finder = new MatchFinder();
         var groups = finder.FindMatches(board);
         Debug.Log($"gruplar: {groups.Count}");
         Debug.Log($"distinct gruplar{groups.Values.Distinct().Count()}");
+        foreach(var g in groups.Values.Distinct()) Debug.Log($"grup @ {g.Position}, hücre: {g.Cells.Count}");
     }
     void LoadLevelInfo(LevelInfo level){
         board = new Cell[level.rows[0].Split(',').Length, level.rows.Length];
@@ -103,35 +106,36 @@ public class BoardManager : MonoBehaviour
     }
 
     void HandleRelease(int pressX, int pressY, int releaseX, int releaseY){
+        MatchFinder finder = new MatchFinder();
+
         if(!IsValidCoordinate(releaseX, releaseY) || !IsValidCoordinate(pressX, pressY)){return;}
 
-            if(board[releaseX, releaseY].item == null || board[pressX, pressY].item == null){return;}
+        if(board[releaseX, releaseY].item == null || board[pressX, pressY].item == null){return;}
+
+        SwapItems(pressX, pressY, releaseX, releaseY);
+
+        if(!HasMatch(pressX, pressY) && !HasMatch(releaseX, releaseY) &&  !Items.IsSpecial(board[pressX, pressY].item.type) &&  !Items.IsSpecial(board[releaseX, releaseY].item.type)){
             SwapItems(pressX, pressY, releaseX, releaseY);
-            if(!HasMatch(pressX, pressY) && !HasMatch(releaseX, releaseY) &&  !Items.IsSpecial(board[pressX, pressY].item.type) &&  !Items.IsSpecial(board[releaseX, releaseY].item.type)){
-                SwapItems(pressX, pressY, releaseX, releaseY);
-                return;
-            }
-            
-            if(pressX == releaseX && pressY == releaseY){
-                if(Items.IsSpecial(board[pressX, pressY].item.type)){ClearCell(pressX, pressY);}
-                else{CheckMatches(pressX, pressY);}
-                FallItems();
-                SpawnItems();
-                return;
-            }
+            return;
+        }
 
-            if(Items.IsSpecial(board[releaseX, releaseY].item.type)){ClearCell(releaseX, releaseY);}
-            else{CheckMatches(releaseX, releaseY);}
-            
-            Items other = board[pressX, pressY].item; 
+        var pressItem = board[pressX, pressY].item;
+        if(pressItem != null && Items.IsSpecial(pressItem.type)){ClearCell(pressX, pressY);}
 
-            if(other != null){
-                if(Items.IsSpecial(other.type)){ClearCell(pressX, pressY);}
-                else{CheckMatches(pressX, pressY);}
-            }            
+        var releasedItem = board[releaseX, releaseY].item;
+        if(releasedItem != null && Items.IsSpecial(releasedItem.type)){ClearCell(releaseX, releaseY);}
+        FallItems();
+        SpawnItems();
+        var matches = finder.FindMatches(board);
+        int guard = 0;
+        while(matches.Count > 0){
+            if(++guard > 50){ Debug.LogWarning("Cascade 50 turu aştı"); break;}
+            ApplyMatches(matches);
             FallItems();
             SpawnItems();
+            matches = finder.FindMatches(board);
         }
+    }
     
     bool HasMatch(int x, int y){
         (int a, int b) = CountHorizontal(x, y);
@@ -142,8 +146,33 @@ public class BoardManager : MonoBehaviour
         return horizontal >= 3 || vertical >= 3;
     }
 
-    
-        
+    //foundmatches (x,y)koordinat key --> value: MatchGroup
+    void ApplyMatches(Dictionary<(int, int), MatchGroup> foundMatches){
+        foreach(var g in foundMatches.Values.Distinct()){
+            foreach(var cell in g.Cells){
+                ClearCell(cell.x, cell.y);
+            }
+            (int left, int right) = g.Horizon;
+                (int top, int bottom) = g.Vertical;
+                int allVert = top + bottom + 1;
+                int allHor= left + right + 1;
+                Items appliedPrefab = (allVert, allHor) switch
+                {
+                    var (v, h) when v >= 5|| h >= 5     => DiscoBallPrefab,
+                    var (v, h) when v >=3 && h >= 3     => BombPrefab,
+                    var (v, h) when v > 3               => VerticalRocketPrefab,
+                    var (v, h) when h >3                => HorizontalRocketPrefab,
+                    _                                   => null
+
+                };
+
+                (int posX, int posY) = g.Position;
+                if(appliedPrefab != null){
+                    Items created = CreateItem(appliedPrefab, posX, posY);
+                }
+        }
+
+    }
    
 
     void CheckMatches(int itemCellX, int itemCellY){

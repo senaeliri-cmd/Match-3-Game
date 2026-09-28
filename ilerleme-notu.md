@@ -1,142 +1,123 @@
 # MatchPets — İlerleme Notu
 
-Son güncelleme: 7 Eylül 2026
+Son güncelleme: 23 Eylül 2026
 
 ## Çalışan durum
 
-**Özel item sistemi çalışıyor, konum bilgisi tekilleştirildi.**
+**Cascade çalışıyor.** Oyun artık gerçek bir match-3 döngüsüne sahip.
 
-- `ClearCell(x, y)` — yok etmenin tek kapısı. Sınır ve boş hücre guard'ı içeride.
-- `CreateItem(prefab, x, y)` — yaratmanın tek kapısı.
-- `MoveItem(from, to)` — taşımanın tek kapısı. `FallItems` bunu çağırıyor.
-- `GridToWorld(x, y)` — grid→dünya dönüşümü tek yerde.
-- `IsValidCoordinate(x, y)` — sınır kontrolü tek yerde.
-- `ActivateSpecial(x, y, type)` — yatay roket satırı, dikey roket sütunu, bomba 3x3.
-- **Zincir patlama doğrulandı** — roket → roket → bomba, üç seviye derinlik, sonsuz
-  döngü yok (*mark-before-recurse*: hücre önce `null`'a çekiliyor).
-- `LoadLevelInfo(level)` — tahta boyutu veriden geliyor. `Enum.TryParse` +
-  `candyDict.TryGetValue` ile seviye dosyasından özel item yüklenebiliyor.
-- **`item.x`/`item.y` kaldırıldı.** Konumun tek doğruluk kaynağı `board[x, y]`.
-  Girdi yolu tamamen koordinat tabanlı: `Update` basma hücresini alanda saklıyor,
-  `HandleRelease(pressX, pressY, releaseX, releaseY)` koordinat alıyor.
-  `transform.position`'dan koordinat türetilmiyor (animasyon eklenince bozulurdu).
+### Tek kapılar
+- `ClearCell(x, y)` — yok etme. Sınır ve boş hücre guard'ı içeride.
+- `CreateItem(prefab, x, y)` — yaratma.
+- `MoveItem(from, to)` — taşıma.
+- `GridToWorld(x, y)` / `IsValidCoordinate(x, y)` — dönüşüm ve sınır, tek yerde.
 
-## Şu an üzerinde çalışılan: `MatchFinder` (Adım 6)
+### Konum
+`item.x` / `item.y` kaldırıldı. Tek doğruluk kaynağı `board[x, y]`. Girdi yolu
+koordinat tabanlı: `Update` basma hücresini alanda saklıyor, `HandleRelease`
+dört koordinat alıyor. `transform.position`'dan koordinat türetilmiyor.
 
-Eşleşme tespitini `BoardManager`'dan ayıran yeni sınıf. `Assets/Scripts/cascade.cs`
-dosyasında taslak var — **adı `MatchFinder` olmalı**, cascade ayrı bir şey.
+### `MatchFinder` (ayrı sınıf, `MonoBehaviour` değil, `Cell[,]` alıyor)
+İki geçiş: önce yatay koşular (`left == 0` olan hücre grubu yaratır, koşunun
+tüm hücreleri sözlüğe ve `group.Cells`'e girer), sonra dikey (`bottom == 0`).
+Dikey koşu, hücrelerinden biri sözlükte bulunursa mevcut gruba **merge** olur —
+L/T böyle tespit ediliyor. Kesişimde `Position` da o hücreye kaydırılıyor.
 
-### Verilen tasarım kararları
+Döndürdüğü: `Dictionary<(int,int), MatchGroup>`. Anahtarlar = temizlenecek
+hücreler, `Values.Distinct()` = gruplar.
 
-**Sınıf `MonoBehaviour` olmayacak, `BoardManager` almayacak.** Parametresi `Cell[,] board`.
-Amaç: Unity açmadan test edilebilmesi. Tahtayı **hiç değiştirmeyecek** — sadece okur ve
-bulduğunu döndürür. Temizleme ve özel item üretimi `BoardManager`'da kalır.
+`MatchGroup` bir **class** (referans tipi — merge sırasında aynı nesne paylaşılıyor).
+Alanları: `Position`, `Horizon (left,right)`, `Vertical (top,bottom)`,
+`Cells` (**HashSet**, tekrar olmasın diye).
 
-**Dönüş: `List<MatchGroup>`.** Ayrı bir `bool` gerekmez — boş liste "eşleşme yok"
-demektir. Cascade döngüsü bunu kullanır.
+### `ApplyMatches`
+Her grup için: hücreleri `ClearCell` ile temizle, sonra şekle bakıp `Position`'a
+özel item üret. `switch` ifadesi, öncelik: disco (5+) → bomba (L/T) → dikey roket
+→ yatay roket → yok (3'lü). Eski 100 satırlık `CheckMatches` silindi.
 
-**İlk eşleşmede `return` YOK.** Biriktir, taramanın sonunda bir kez döndür.
-Tarama sırasında `BoardManager`'ın fonksiyonlarını çağırma — gezdiğin yapıyı
-gezerken değiştirmiş olursun.
+### Cascade döngüsü (`HandleRelease` içinde)
+```
+guard'lar → SwapItems → geçerlilik kontrolü (geçersizse geri al)
+→ basılan özelse ClearCell → bırakılan özelse ClearCell
+→ FallItems/SpawnItems → while(matches.Count > 0){ Apply, Fall, Spawn, Find }
+```
+50 tur sigortası var (`LogWarning` + `break`).
 
-**`MatchGroup` struct'ı yazıldı** — `readonly struct`, get-only property'ler:
-`Position (posX, posY)`, `Horizon (left, right)`, `Vertical (top, bottom)`.
-Şekil ayrı alan olarak tutulmuyor, sayılardan hesaplanıyor.
+### Test seviyeleri
+`CascadeTest1` (yatay 3'lü + 4'lü → 7 hücre, 2 grup),
+`CascadeTest2` (L şekli → 5 hücre, 1 grup). İkisi de doğru sonuç veriyor.
 
-**Tarama modeli: A — her hücreden iki yöne say.** (Merkez etrafında sayma; mevcut
-`CountHorizontal`/`CountVertical` mantığı.) Struct bu modele göre tasarlandı.
+## Yarın: özel item'ın doğduğu hücre
 
-### Tekrar eleme — çözülmesi gereken kısım
+**Sorun:** oyuncu sürükleyip 4'lü yaptığında roket koşunun **sol ucunda** doğuyor,
+oyuncunun bıraktığı hücrede değil. Ticari match-3'lerde beklenen davranış ikincisi.
 
-Model A'da yatay 3'lünün üç hücresi de aynı koşuyu raporlar. Ayrıca T şeklinde
-kesişim hücresinde `left != 0` olabilir, dolayısıyla "sadece `left==0` kaydet"
-kuralı L/T'yi kaçırır. Ve L/T'nin dikey kolu, kolun alt ucundan bağımsız bir dikey
-koşu olarak ikinci kez raporlanır → bir bomba + bir roket üretilir (yanlış).
+**Kararlaştırılan çözüm:** `ApplyMatches`'e ikinci parametre:
 
-**Kararlaştırılan çözüm — iki geçiş:**
+```csharp
+void ApplyMatches(Dictionary<(int,int), MatchGroup> foundMatches,
+                  (int, int)? preferredCell = null)
+```
 
-1. **L/T geçişi:** her hücrede iki yönü de say. İkisi de 3+ ise L/T. Kaydet ve
-   **her iki kolun tüm hücrelerini** `HashSet<(int,int)>` ile "kullanıldı" işaretle.
-2. **Düz koşu geçişi:** `left==0 && yatay>=3` (ve `bottom==0 && dikey>=3`) olan,
-   hücreleri işaretli olmayan koşuları kaydet.
+Grup içinde: `preferredCell` doluysa **ve** `g.Cells` onu içeriyorsa oraya doğsun,
+yoksa `g.Position`. (`Cells` HashSet olduğu için `Contains` O(1).)
 
-`HashSet` metodun **içinde** tanımlanacak, `Cell`'e "sayıldı" alanı eklenmeyecek —
-geçici bilgi kalıcı veri yapısına yazılmaz, yoksa her çağrıda sıfırlaman gerekir.
+`HandleRelease`'te `preferred = (releaseX, releaseY)` ile başla, **ilk turdan sonra
+`null`'a çek** — cascade turlarında oyuncu hücresi yok, `Position` kullanılmalı.
 
-### Yazma sırası
-
-1. Sadece **yatay** koşular → listeye ekle → `Debug.Log` ile doğrula ← **buradasın**
-2. Dikey koşuları ekle
-3. L/T + `HashSet` elemesi
-
-Üçünü birden yazma; her adımda çalıştığını gör.
-
-### Taslaktaki bilinen hatalar (`cascade.cs`)
-
-- `using BoardManager;` — `using` namespace içindir, sınıf adı değil
-- `: MonoBehaviour` kaldırılacak, parametre `Cell[,]` olacak
-- Dönüş tipi geçerli C# değil → `List<MatchGroup>`
-- `FindVertical`'da `nextX++/currX++` yazılmış, `nextY++/currY++` olmalı → **sonsuz döngü**
-- `FindHorizontal` sağ döngüsünde `currX--`, `currX++` olmalı.
-  Aslında `currX`'e hiç gerek yok — her hücreyi başlangıçtaki tipe karşılaştır.
-- `j += right` — `j` y ekseni, `right` x uzunluğu; yanlış eksen
-- `bottomtNum` yazım hatası, `HasMatch` tüm yollarda `return` etmiyor
-- `CandyType.Ispecial` → `Items.IsSpecial`
+`(int, int)?` = nullable tuple. `.HasValue` ile dolu mu diye sorulur, `.Value` ile
+içindekine ulaşılır. `(-1,-1)` sentinel yerine `null` tercih edildi: "değer yok" ile
+"geçersiz koordinat" farklı şeyler.
 
 ## Sonraki adımlar
 
-4. `BoardManager` grupları uygulasın — temizle + özel item üret (mevcut `CheckMatches`
-   yerini alacak)
-5. **Cascade döngüsü** — `while(true){ bul; boşsa break; uygula; FallItems; SpawnItems; }`
-   Özyineleme değil döngü: doğrusal tekrar, dallanma yok.
-   Sonsuz döngüye karşı tur sayacı + `LogWarning` koy.
-6. Disco ball — hedef renk bilgisi takas anında doğuyor, `ActivateSpecial`'a ulaşmıyor
-7. Özel item kombinasyonları (roket+roket artı, roket+bomba geniş, disco+özel)
-8. Deadlock tespiti + karıştırma (`HasMatch` üzerine kurulur)
-9. Oyun kuralları — hamle sayısı, hedef, kazanma/kaybetme
+1. **Disco ball** — hedef renk takas anında doğuyor, `ActivateSpecial`'a ulaşmıyor.
+   `TypesOnBoard`'a null guard gerekiyor.
+2. **Özel item kombinasyonları** — roket+roket artı, roket+bomba geniş, disco+özel.
+3. **Deadlock tespiti + karıştırma** — `HasMatch` üzerine kurulur. Mülakat malzemesi.
+4. **Oyun kuralları** — hamle sayısı, hedef, kazanma/kaybetme.
 
-Sonra: animasyon, UI, ses, seviye tasarımı (okul dönemi işi).
+Sonra: animasyon, UI, ses, seviye tasarımı.
 
 ## Kalan teknik borç
 
-- `CountHorizontal`/`CountVertical`'da sihirli `6` — `IsValidCoordinate` kullan
-- `>= 5` dalı, hem yatay hem dikey 5'li durumda sadece yatayı temizliyor
-- `HandleRelease`'te `IsSpecial` aynı item için iki kez soruluyor
-- Tıklama dalındaki üç satırlık tekrar → `Resolve(x, y)` metoduna
-- Özel item prefab alanları (`BombPrefab` vb.) `candyDict[CandyType.bomb]` ile değiştirilebilir
-- `CheckMatches`'teki `.type` / `.itemName` atamaları gereksiz (prefab zaten taşıyor)
-- `Instantiate`/`Destroy` yerine object pooling
+- Cascade döngüsünde `FallItems/SpawnItems` iki yerde — `do-while` ile tek yere iner
+- `CountHorizontal`/`CountVertical` (BoardManager'daki eskiler) hâlâ sihirli `6` kullanıyor
+- Dikey bir koşu iki farklı yatay grubu keserse ikisi de L/T sayılır → iki bomba (nadir)
+- `MatchFinder` her `HandleRelease`'te yeniden `new`leniyor — alan olabilir
 - Adım 7 — `ActivateSpecial`'ın `if` zinciri polimorfizme çevrilebilir (Open/Closed)
+- `Instantiate`/`Destroy` yerine object pooling
 
 ## Takvim
 
-- **Eylül** — `MatchFinder` + cascade + disco (derin odak isteyen işler)
-- **Ekim–Aralık** (okul, düşük tempo) — kombinasyonlar, kurallar, animasyon, UI
+- **Eylül–Ekim** — disco, kombinasyonlar, deadlock, kurallar
+- **Ekim–Aralık** (okul, düşük tempo) — animasyon, UI, ses, seviye tasarımı
 - **Ocak** — staj başvuruları
 
 Yanında: algoritma/veri yapıları pratiği, CV, GitHub README + ekran görüntüleri.
 
 ## Öğrenilenler
 
-- Değer tipi / referans tipi; Unity'de `Destroy` ertelenir, "fake null"
-- Unity `==`'i ezer: yok edilmiş nesne `null`'a eşit sayılır → referans karşılaştırması
-  güvenilmez, kimlik olarak koordinat kullan
-- **Enum'lar sayı olarak serialize edilir** — ortadan silmek/sıra değiştirmek kaydedilmiş
-  veriyi sessizce bozar (bomba prefab'ı kendini roket sandı). Sadece sona ekle.
-- MonoBehaviour `new` ile yaratılamaz; struct ve düz sınıflar için kısıt yok
-- Prefab dosyası kodda değişken yaratmaz — `public` alan + Inspector'da sürükleme
-- `Library` türetilmiş veri, silinip yeniden üretilebilir; gerçek ayarlar `.meta`'larda
-- **Değişkenin ömrü, işinin ömrü kadar olmalı** — `groupList`, `HashSet`, `FallItems`'taki
-  `int a`: hepsi metod içinde. `Update`'te kareler arası yaşaması gereken şey ise alan olmalı.
-- **Dallanan problem → özyineleme, doğrusal problem → döngü.** Zincir patlama dallanıyor
-  (ağaç), koşu tarama ve cascade doğrusal.
+- Değer/referans tipi; Unity'de `Destroy` ertelenir ("fake null"), `==` ezilmiştir
+- **Enum'lar sayı olarak serialize edilir** — ortadan silmek kaydedilmiş veriyi bozar
+- MonoBehaviour `new` ile yaratılamaz; struct ve düz sınıflarda kısıt yok
+- **Tip, veriye dair bir iddiadır** — sıra varsa `List`, benzersizlik varsa `HashSet`,
+  eşleme varsa `Dictionary`
+- **class vs struct:** merge sırasında aynı nesnenin paylaşılması gerekiyordu → class
+- **Değişkenin ömrü, işinin ömrü kadar olmalı** (metod içi vs alan)
+- **Dallanan problem → özyineleme, doğrusal problem → döngü**
+- **Bir guard sadece kontrol ettiği koordinatı korur** — gezinen fonksiyonda kontrol
+  döngünün koşulunda olmalı
 - Gezdiğin veri yapısını gezerken değiştirme
-- `Try` öneki `try/catch` değil, TryParse desenidir; exception kontrol akışı için kullanılmaz
-- İsimlendirme: `Has`/`Is`/`Can` saf sorgular, `Try` bool+veri, PascalCase public
-- **Tek konvansiyon seç:** `x`/`y` mi `row`/`column` mu — karıştırmak bu projede 5 hataya yol açtı
-- Dönüşüm sınırda, tek yerde yapılır (koordinat çevirme, string→enum)
-- Stack trace aşağıdan yukarı okunur; tekrar eden metod adı özyineleme derinliğidir
-- Gözlemlenebilir fark üretmeyen test, test değildir
-- Guard'a çevirirken koşulu ters çevir; De Morgan: `!(a && b)` = `!a || !b`
-- Mekanik refactor tehlikelidir — derlenir ama yanlış olur (*silent failure*)
+- **Önce ölç, sonra uygula** — sayma ile kaydetme ayrı adımlar
+- Bilgiyi elindeyken sakla, sonradan yeniden üretme (kesişim hücresi, `Cells`)
+- **Tanım tipli, çağrı tipsiz** — `CreateItem(Items prefab, int x)` vs `CreateItem(p, x)`
+- `foreach (var (x, y) in ...)` = deconstruction; `foreach ((int x,int y) cell in ...)`
+  tek bir `cell` değişkeni tanımlar
+- `using` direktifleri **dosya başına** geçerlidir
+- `Try` öneki `try/catch` değil, TryParse desenidir
+- İsimlendirme: fiil + nesne, somut fiil (`Apply`, `Clear`, `Find` — `Process` değil)
+- Tek konvansiyon seç: `x`/`y` mi `row`/`column` mu — karıştırmak 5+ hataya yol açtı
+- Dönüşüm sınırda, tek yerde (koordinat çevirme, string→enum)
+- Geçen bir test, kodun doğru olduğunu değil **o senaryoda** doğru olduğunu gösterir
 - Önce derleyiciye sor, derleyicinin bilemeyeceğini insana sor
